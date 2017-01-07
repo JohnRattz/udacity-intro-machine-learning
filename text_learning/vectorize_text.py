@@ -5,7 +5,10 @@ import pickle
 import re
 import sys
 
-sys.path.append( "../tools/" )
+from nltk.corpus import stopwords
+from sklearn.feature_extraction.text import TfidfVectorizer
+
+sys.path.append( "../tools/")
 from parse_out_email_text import parseOutText
 
 """
@@ -34,32 +37,53 @@ word_data = []
 ### can take a long time
 ### temp_counter helps you only look at the first 200 emails in the list so you
 ### can iterate your modifications quicker
-temp_counter = 0
+# temp_counter = 0
 
 
 for name, from_person in [("sara", from_sara), ("chris", from_chris)]:
     for path in from_person:
         ### only look at first 200 emails when developing
         ### once everything is working, remove this line to run over full dataset
-        temp_counter += 1
-        if temp_counter < 200:
-            path = os.path.join('..', path[:-1])
-            print path
-            email = open(path, "r")
+        path = os.path.join('..', path[:-1])  # Remove newline
+        email = open(path, "r")
+        ### use parseOutText to extract the text from the opened email
+        text = parseOutText(email)
+        ### use str.replace() to remove any instances of the words
+        ### ["sara", "shackleton", "chris", "germani"]
+        # Last tuple is a catch-all for extra spaces left over from replace().
+        mapping =[("sara", ""),("shackleton", ""),("chris", ""),("germani", ""), ("  ", " ")]
 
-            ### use parseOutText to extract the text from the opened email
+        # for find_signature.py in "Remove, Repeat".
+        mapping += [("sshacklensf", ""), ("cgermannsf", "")]
 
-            ### use str.replace() to remove any instances of the words
-            ### ["sara", "shackleton", "chris", "germani"]
+        for k, v in mapping:
+            text = text.replace(k, v)
+        ### append the text to word_data
+        word_data.append(text)
+        ### append a 0 to from_data if email is from Sara, and 1 if email is from Chris
+        if from_person == from_sara:
+            from_data.append(0)
+        elif from_person == from_chris:
+            from_data.append(1)
 
-            ### append the text to word_data
-
-            ### append a 0 to from_data if email is from Sara, and 1 if email is from Chris
-
-
-            email.close()
+        email.close()
 
 print "emails processed"
+# print word_data[:][:10]
+print word_data[152]
+
+# Remove stopwords
+# for stopword in stopwords.words("english"):
+#     for line_indx in range(len(word_data)):
+#         word_data[line_indx] = word_data[line_indx].replace(str(stopword), "")
+
+vectorizer = TfidfVectorizer(stop_words='english')
+tfidf = vectorizer.fit_transform(word_data)
+print tfidf
+word_list = vectorizer.get_feature_names()
+print len(word_list)
+print "Word # 34597:", word_list[34597]
+
 from_sara.close()
 from_chris.close()
 

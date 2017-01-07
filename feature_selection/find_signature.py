@@ -14,7 +14,6 @@ word_data = pickle.load( open(words_file, "r"))
 authors = pickle.load( open(authors_file, "r") )
 
 
-
 ### test_size is the percentage of events assigned to the test set (the
 ### remainder go into training)
 ### feature matrices changed to dense representations for compatibility with
@@ -38,6 +37,31 @@ labels_train   = labels_train[:150]
 
 
 ### your code goes here
+from sklearn.tree import DecisionTreeClassifier
+clf = DecisionTreeClassifier().fit(features_train, labels_train)
+pred = clf.predict(features_test)
+
+from sklearn.metrics import accuracy_score
+print "% Accuracy:", accuracy_score(labels_test, pred)
+
+# Examine feature importance.
+feature_names = vectorizer.get_feature_names()
+highest_feature_importance = 0
+most_important_feature_indx = 0
+num_important_features = 0
+for feat_indx in range(len(clf.feature_importances_)):
+    feature_importance = clf.feature_importances_[feat_indx]
+    if feature_importance > 0.2:
+        print feature_importance, feature_names[feat_indx]
+        num_important_features += 1
+    if feature_importance > highest_feature_importance:
+        highest_feature_importance = feature_importance
+        most_important_feature_indx = feat_indx
+
+print "Importance of most important feature:", highest_feature_importance
+print "# (index) of most important feature:", most_important_feature_indx
+print "Most discriminative word:", vectorizer.get_feature_names()[most_important_feature_indx]
+
 
 
 

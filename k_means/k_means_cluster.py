@@ -8,7 +8,7 @@
 
 
 import pickle
-import numpy
+import numpy as np
 import matplotlib.pyplot as plt
 import sys
 sys.path.append("../tools/")
@@ -48,11 +48,14 @@ data_dict.pop("TOTAL", 0)
 ### can be any key in the person-level dictionary (salary, director_fees, etc.) 
 feature_1 = "salary"
 feature_2 = "exercised_stock_options"
+# feature_3 = "total_payments"
 poi  = "poi"
-features_list = [poi, feature_1, feature_2]
+features_list = [poi, feature_1, feature_2]#, feature_3]
 data = featureFormat(data_dict, features_list )
 poi, finance_features = targetFeatureSplit( data )
 
+print "poi:", poi
+print "finance_features:", finance_features
 
 ### in the "clustering with 3 features" part of the mini-project,
 ### you'll want to change this line to 
@@ -64,9 +67,28 @@ plt.show()
 
 ### cluster here; create predictions of the cluster labels
 ### for the data and store them to a list called pred
+from sklearn.cluster import KMeans
+clf = KMeans(n_clusters=2).fit(finance_features)
+pred = clf.predict(finance_features)
 
+# Get max and min values of "exercised_stock_options".
+exercised_stock_options = [v["exercised_stock_options"]
+                           for v in data_dict.itervalues()
+                           if v["exercised_stock_options"] != "NaN"]
+print r'Max "exercised_stock_options":', max(exercised_stock_options)
+print r'Min "exercised_stock_options":', min(exercised_stock_options)
 
+# Get max and min values of "salary".
+salaries = [v["salary"]
+            for v in data_dict.itervalues()
+            if v["salary"] != "NaN"]
+print r'Max "salary":', max(salaries)
+print r'Min "salary":', min(salaries)
 
+########## Feature Scaling ##########
+from sklearn.preprocessing import MinMaxScaler
+scaler = MinMaxScaler().fit(finance_features)
+print "Rescaled values:", scaler.transform([200000., 1000000.])
 
 ### rename the "name" parameter when you change the number of features
 ### so that the figure gets saved to a different file
