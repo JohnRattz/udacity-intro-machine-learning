@@ -23,7 +23,7 @@ from sklearn.cross_validation import cross_val_score
 
 from random import random
 
-sys.path.append("../tools/")
+sys.path.append("../../tools/")
 from feature_format import featureFormat, targetFeatureSplit
 from tester import dump_classifier_and_data
 
@@ -100,8 +100,7 @@ def remove_outliers(data_dict, features_list,
         # Plot after removing outliers.
         make_scatter_plots(features_list_to_check)
 
-
-def scoring_func(clf, features, labels):
+def scoring_func_clf(clf, features, labels):
     """
     A scoring function to be used by GridSearchCV in `main()`.
     Taken from `tester.py` in this directory.
@@ -143,14 +142,63 @@ def scoring_func(clf, features, labels):
     try:
         # total_predictions = true_negatives + false_negatives + false_positives + true_positives
         # accuracy = 1.0 * (true_positives + true_negatives) / total_predictions
-        # precision = 1.0 * true_positives / (true_positives + false_positives)
-        # recall = 1.0 * true_positives / (true_positives + false_negatives)
+        precision = 1.0 * true_positives / (true_positives + false_positives)
+        recall = 1.0 * true_positives / (true_positives + false_negatives)
         f1 = 2.0 * true_positives / (2 * true_positives + false_positives + false_negatives)
         # f2 = (1 + 2.0 * 2.0) * precision * recall / (4 * precision + recall)
-        return f1
+        return f1 if precision > 0.3 and recall > 0.3 else 0.0
     except:
         return 0.0
 
+def scoring_func(features, labels):
+    """
+    A scoring function to be used by GridSearchCV in `main()`.
+    Taken from `tester.py` in this directory.
+    """
+    cv = StratifiedShuffleSplit(labels, n_iter=1000, test_size=0.1, random_state=42)
+    true_negatives = 0
+    false_negatives = 0
+    true_positives = 0
+    false_positives = 0
+    for train_idx, test_idx in cv:
+        features_train = []
+        features_test = []
+        labels_train = []
+        labels_test = []
+        for ii in train_idx:
+            features_train.append(features[ii])
+            labels_train.append(labels[ii])
+        for jj in test_idx:
+            features_test.append(features[jj])
+            labels_test.append(labels[jj])
+
+        ### fit the classifier using training set, and test on test set
+        clf.fit(features_train, labels_train)
+        predictions = clf.predict(features_test)
+        for prediction, truth in zip(predictions, labels_test):
+            if prediction == 0 and truth == 0:
+                true_negatives += 1
+            elif prediction == 0 and truth == 1:
+                false_negatives += 1
+            elif prediction == 1 and truth == 0:
+                false_positives += 1
+            elif prediction == 1 and truth == 1:
+                true_positives += 1
+            else:
+                print "Warning: Found a predicted label not == 0 or 1."
+                print "All predictions should take value 0 or 1."
+                print "Evaluating performance for processed predictions:"
+                break
+    try:
+        # total_predictions = true_negatives + false_negatives + false_positives + true_positives
+        # accuracy = 1.0 * (true_positives + true_negatives) / total_predictions
+        precision = 1.0 * true_positives / (true_positives + false_positives)
+        recall = 1.0 * true_positives / (true_positives + false_negatives)
+        f1 = 2.0 * true_positives / (2 * true_positives + false_positives + false_negatives)
+        # f2 = (1 + 2.0 * 2.0) * precision * recall / (4 * precision + recall)
+        return f1 if precision > 0.3 and recall > 0.3 else 0.0
+    except:
+        return 0.0
 
 def main():
     ### Task 1: Select what features you'll use.
@@ -164,7 +212,7 @@ def main():
                      'from_poi_to_this_person', 'shared_receipt_with_poi']
 
     ### Load the dictionary containing the dataset
-    with open("final_project_dataset.pkl", "r") as data_file:
+    with open("../final_project_dataset.pkl", "r") as data_file:
         data_dict = pickle.load(data_file)
 
     # BEGIN DEBUG
@@ -219,20 +267,27 @@ def main():
     # Define Parameter Sets.
     params_GaussianNB = \
         {'selector': [SelectKBest()],
-         'selector__k': [1, 2, 3, 4, 'all'],
+         # 'selector__k': [1, 2, 3, 4, 'all'],
+         'selector__k': ['all'],
+         'selector__score_func': [],
          'clf': [GaussianNB()]}
 
     params_SVC = \
         {'selector': [SelectKBest()],
-         'selector__k': [1, 2, 3, 4, 'all'],
+         # 'selector__k': [1, 2, 3, 4, 'all'],
+         'selector__k': ['all'],
          'clf': [SVC()],
          'clf__kernel': ['rbf', 'sigmoid'],
-         'clf__C': [0.01, 0.1, 1.0, 10.0, 100.0, 1000.0],
+         # 'clf__C': [0.01, 0.1, 1.0, 10.0, 100.0, 1000.0],
+         'clf__C': [0.1, 1.0, 10.0, 100.0],
+         # 'clf__C': [0.1, 0.5, 1.0, 10.0, 100.0],
          'clf__gamma': [0.001, 0.01, 0.1, 1.0, 'auto']}
+         # 'clf__gamma': [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 2.0, 'auto']}
 
     params_DecisionTreeClassifier = \
         {'selector': [SelectKBest()],
-         'selector__k': [1, 2, 3, 4, 'all'],
+         # 'selector__k': [1, 2, 3, 4, 'all'],
+         'selector__k': ['all'],
          'clf': [DecisionTreeClassifier()],
          'clf__criterion': ['gini', 'entropy'],
          'clf__splitter': ['best', 'random'],
@@ -249,7 +304,7 @@ def main():
     ### http://scikit-learn.org/stable/modules/generated/sklearn.cross_validation.StratifiedShuffleSplit.html
 
     # Specify the scoring function for the `GridSearchCV` object below.
-    scoring = scoring_func
+    scoring = scoring_func_clf
     # scoring = 'f1'
 
     # Tuples of scores and the corresponding classifiers.
@@ -257,64 +312,64 @@ def main():
 
     print "Commencing Grid Search"
 
-    num_CV_methods = 2
-    # For each train-test splitting method (acquiring training and testing data).
-    for i in range(num_CV_methods):
-        print "Testing Train-test Splitting Method {}".format(i)
-        features_train = []
-        features_test = []
-        labels_train = []
-        labels_test = []
-        if i == 0:
-            # Train-test Splitting Method 1
-            features_train, features_test, labels_train, labels_test = \
-                train_test_split(features, labels, test_size=0.2, random_state=42)
-        elif i == 1:
-            # Train-test Splitting Method 2
-            splitter = StratifiedShuffleSplit(labels, n_iter=1, test_size=0.2, random_state=42)
-            for train_idx, test_idx in splitter:
-                for ii in train_idx:
-                    features_train.append(features[ii])
-                    labels_train.append(labels[ii])
-                for jj in test_idx:
-                    features_test.append(features[jj])
-                    labels_test.append(labels[jj])
+    # num_CV_methods = 2
+    # # For each train-test splitting method (acquiring training and testing data).
+    # for i in range(num_CV_methods):
+    #     print "Testing Train-test Splitting Method {}".format(i)
+    #     features_train = []
+    #     features_test = []
+    #     labels_train = []
+    #     labels_test = []
+    #     if i == 0:
+    #         # Train-test Splitting Method 1
+    #         features_train, features_test, labels_train, labels_test = \
+    #             train_test_split(features, labels, test_size=0.2, random_state=42)
+    #     elif i == 1:
+    #         # Train-test Splitting Method 2
+    #         splitter = StratifiedShuffleSplit(labels, n_iter=1, test_size=0.2, random_state=42)
+    #         for train_idx, test_idx in splitter:
+    #             for ii in train_idx:
+    #                 features_train.append(features[ii])
+    #                 labels_train.append(labels[ii])
+    #             for jj in test_idx:
+    #                 features_test.append(features[jj])
+    #                 labels_test.append(labels[jj])
+    #
+    #     # Cross-validation object to use in the grid search (cross-validates on training set).
+    #     cv = StratifiedShuffleSplit(labels_train, n_iter=5, test_size=0.2, random_state=42)
+    #
+    #     # print "features_train:", features_train[:20]
+    #     # print "features_test:",  features_test[:20]
+    #     # print "labels_train:",   labels_train[:20]
+    #     # print "labels_test:",    labels_test[:20]
+    #
+    #     # For each pipeline and corresponding parameter set
+    #     # to perform grid searches over...
+    #     for j in range(len(pipes)):
+    #         print "Testing Pipeline {}".format(j)
+    #         # `n_jobs=-2` to run with all but one logical processor.
+    #         grid_search = GridSearchCV(pipes[j], param_sets[j],
+    #                                    scoring=scoring, cv=cv,
+    #                                    n_jobs=-2, verbose=1)
+    #         # Train on training samples so that scores reflect generalization performance.
+    #         grid_search.fit(features_train, labels_train)
+    #         clf = grid_search.best_estimator_
+    #         score = grid_search.best_score_
+    #         score_clf_tuples.append((score, clf))
 
-        # Cross-validation object to use in the grid search (cross-validates on training set).
-        cv = StratifiedShuffleSplit(labels_train, n_iter=5, test_size=0.2, random_state=42)
-
-        # print "features_train:", features_train[:20]
-        # print "features_test:",  features_test[:20]
-        # print "labels_train:",   labels_train[:20]
-        # print "labels_test:",    labels_test[:20]
-
-        # For each pipeline and corresponding parameter set
-        # to perform grid searches over...
-        for j in range(len(pipes)):
-            print "Testing Pipeline {}".format(j)
-            # `n_jobs=-2` to run with all but one logical processor.
-            grid_search = GridSearchCV(pipes[j], param_sets[j],
-                                       scoring=scoring, cv=cv,
-                                       n_jobs=-2, verbose=1)
-            # Train on training samples so that scores reflect generalization performance.
-            grid_search.fit(features_train, labels_train)
-            clf = grid_search.best_estimator_
-            score = grid_search.best_score_
-            score_clf_tuples.append((score, clf))
-
-    # cv = StratifiedShuffleSplit(labels, n_iter=10, test_size=0.2, random_state=42)
-    # # For each pipeline and corresponding parameter set
-    # # to perform grid searches over...
-    # for j in range(len(pipes)):
-    #     print "Testing Pipeline {}".format(j)
-    #     # `n_jobs=-2` to run with all but one logical processor.
-    #     grid_search = GridSearchCV(pipes[j], param_sets[j],
-    #                                scoring=scoring, cv=cv,
-    #                                n_jobs=-2, verbose=1)
-    #     grid_search.fit(features, labels)
-    #     clf = grid_search.best_estimator_
-    #     score = grid_search.best_score_
-    #     score_clf_tuples.append((score, clf))
+    cv = StratifiedShuffleSplit(labels, n_iter=10, test_size=0.1, random_state=42)
+    # For each pipeline and corresponding parameter set
+    # to perform grid searches over...
+    for j in range(len(pipes)):
+        print "Testing Pipeline {}".format(j)
+        # `n_jobs=-2` to run with all but one logical processor.
+        grid_search = GridSearchCV(pipes[j], param_sets[j],
+                                   scoring=scoring, cv=cv,
+                                   n_jobs=-2, verbose=1)
+        grid_search.fit(features, labels)
+        clf = grid_search.best_estimator_
+        score = grid_search.best_score_
+        score_clf_tuples.append((score, clf))
 
 
     # Of all classifiers selected in the grid searches,
@@ -322,8 +377,6 @@ def main():
     score_clf_tuples.sort(key=lambda tup: tup[0], reverse=True)
     best_score = score_clf_tuples[0][0]
     clf = score_clf_tuples[0][1]
-    # TODO: Only if using a subset of samples in training during cross-validation.
-    clf.fit(features, labels)
     print "Best classifier:", clf
     print "Best classifier report:\n", \
         classification_report(labels, clf.predict(features))
